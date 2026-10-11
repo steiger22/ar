@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+  <title>White Dragon – Living Poster | SteigerStudio</title>
+  <script src="https://cdn.jsdelivr.net/npm/aframe@1.5.0/dist/aframe-master.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
+  <style>
+    html, body { margin: 0; padding: 0; height: 100%; overflow: hidden; background: #0b0b0b;
+      font-family: Georgia, "Times New Roman", serif; color: #f3ece0; }
+    #start { position: fixed; inset: 0; z-index: 20; display: flex; flex-direction: column;
+      align-items: center; justify-content: center; text-align: center; padding: 24px;
+      background: radial-gradient(circle at 50% 35%, #3a0d0d 0%, #0b0b0b 70%); }
+    #start .seal { width: 64px; height: 64px; border: 3px solid #c8302a; color: #c8302a;
+      display: flex; align-items: center; justify-content: center; font-size: 30px;
+      margin-bottom: 20px; transform: rotate(-4deg); }
+    #start h1 { font-size: 26px; font-weight: normal; letter-spacing: 1px; margin: 0 0 10px; }
+    #start p { font-size: 15px; opacity: .8; max-width: 300px; line-height: 1.5; margin: 0 0 28px; }
+    #startBtn { background: #c8302a; color: #fff; border: 0; padding: 15px 34px; font-size: 16px;
+      font-family: inherit; letter-spacing: 1px; border-radius: 2px; cursor: pointer; }
+    #hint { position: fixed; bottom: 28px; left: 50%; transform: translateX(-50%); z-index: 10;
+      background: rgba(11,11,11,.75); padding: 10px 18px; border-radius: 20px; font-size: 14px;
+      display: none; white-space: nowrap; }
+    #shop { position: fixed; bottom: 24px; left: 16px; right: 16px; z-index: 10; display: none;
+      text-align: center; background: rgba(11,11,11,.85); border: 1px solid #c8302a;
+      padding: 14px; border-radius: 4px; animation: fadeUp .6s ease; }
+    #shop span { display: block; font-size: 14px; opacity: .85; margin-bottom: 8px; }
+    #shop a { color: #fff; background: #c8302a; text-decoration: none; padding: 10px 22px;
+      display: inline-block; font-size: 15px; letter-spacing: .5px; border-radius: 2px; }
+    @keyframes fadeUp { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+  </style>
+</head>
+<body>
+  <div id="start">
+    <div class="seal">龍</div>
+    <h1>White Dragon</h1>
+    <p>Point your camera at your poster and watch it come to life.</p>
+    <button id="startBtn">START</button>
+  </div>
+
+  <div id="hint">Point your camera at the poster</div>
+
+  <div id="shop">
+    <span>Love it? Get your own living poster</span>
+    <a href="https://steigerstudio.etsy.com" target="_blank" rel="noopener">Visit SteigerStudio →</a>
+  </div>
+
+  <a-scene id="scene"
+    mindar-image="imageTargetSrc: targets.mind; autoStart: false; uiScanning: no; uiLoading: no; filterMinCF: 0.0001; filterBeta: 0.001"
+    color-space="sRGB" renderer="colorManagement: true, physicallyCorrectLights"
+    vr-mode-ui="enabled: false" device-orientation-permission-ui="enabled: false">
+    <a-assets>
+      <video id="anim" src="animation.mp4" preload="auto" playsinline webkit-playsinline muted loop crossorigin="anonymous"></video>
+    </a-assets>
+    <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
+    <a-entity id="target" mindar-image-target="targetIndex: 0">
+      <a-video src="#anim" width="1" height="1.5" position="0 0 0"></a-video>
+    </a-entity>
+  </a-scene>
+
+  <script>
+    const startEl = document.getElementById('start');
+    const hint = document.getElementById('hint');
+    const shop = document.getElementById('shop');
+    const video = document.getElementById('anim');
+    const target = document.getElementById('target');
+    let shopTimer = null;
+
+    document.getElementById('startBtn').addEventListener('click', async () => {
+      try { await video.play(); video.pause(); } catch (e) {}
+      startEl.style.display = 'none';
+      hint.style.display = 'block';
+      document.getElementById('scene').systems['mindar-image-system'].start();
+    });
+
+    target.addEventListener('targetFound', () => {
+      hint.style.display = 'none';
+      video.play();
+      if (!shopTimer) shopTimer = setTimeout(() => { shop.style.display = 'block'; }, 7000);
+    });
+
+    target.addEventListener('targetLost', () => {
+      video.pause();
+      if (shop.style.display !== 'block') hint.style.display = 'block';
+    });
+  </script>
+</body>
+</html>
