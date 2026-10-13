@@ -36,6 +36,10 @@
     #zoomTag { position: fixed; top: 18px; left: 50%; transform: translateX(-50%); z-index: 10;
       background: rgba(11,11,11,.75); padding: 6px 14px; border-radius: 14px; font-size: 14px;
       opacity: 0; transition: opacity .3s; pointer-events: none; }
+    #loadWrap { width: 220px; margin: 0 auto 18px; }
+    #loadBar { height: 4px; background: rgba(243,236,224,.18); border-radius: 2px; overflow: hidden; }
+    #loadFill { height: 100%; width: 0%; background: #c8302a; border-radius: 2px; transition: width .25s ease; }
+    #loadText { font-size: 12px; letter-spacing: 1px; opacity: .75; margin-top: 8px; }
     #soundBtn { position: fixed; top: 16px; right: 16px; z-index: 11; min-width: 44px; height: 44px;
       border-radius: 22px; font-family: inherit; white-space: nowrap; padding: 0 14px !important; border: 1px solid rgba(243,236,224,.35); background: rgba(11,11,11,.7);
       color: #f3ece0; font-size: 20px; display: none; align-items: center; justify-content: center; padding: 0; }
@@ -59,8 +63,9 @@
     <div class="seal">龍</div>
     <h1>White Dragon</h1>
     <p>Point your camera at your poster and watch it come to life.</p>
-    <button id="startBtn">START</button>
-    <div style="margin-top:14px;font-size:11px;opacity:.5">v12</div>
+    <div id="loadWrap"><div id="loadBar"><div id="loadFill"></div></div><div id="loadText">Loading the magic… 0%</div></div>
+    <button id="startBtn" disabled style="opacity:.35">START</button>
+    <div style="margin-top:14px;font-size:11px;opacity:.5">v14</div>
   </div>
 
   <button id="soundBtn" aria-label="Sound">🔊</button>
@@ -277,6 +282,55 @@
     document.addEventListener('touchstart', kickCamera, { passive: true });
     document.addEventListener('visibilitychange', () => { if (!document.hidden) kickCamera(); });
 
+    // ---- Wait until the AR system is fully loaded before the camera can start ----
+    function arSystem() {
+      const sc = document.getElementById('scene');
+      return sc && sc.hasLoaded && sc.systems && sc.systems['mindar-image-system'];
+    }
+    function arReadyToStart() { const sys = arSystem(); return !!(sys && sys.ui); }
+    let arStarted = false;
+    function startWhenReady(tries) {
+      tries = tries || 0;
+      if (arStarted) return;
+      if (arReadyToStart()) {
+        arStarted = true;
+        try { arSystem().start(); } catch (e) { dbg('AR start failed: ' + e.message); }
+      } else if (tries < 300) {
+        setTimeout(() => startWhenReady(tries + 1), 100);   // keep checking for up to 30 s
+      } else {
+        dbg('AR is taking too long to load. Please check your internet connection and reload.');
+      }
+    }
+    // ---- Loading bar: follows the real loading steps, creeping smoothly in between ----
+    (function loadingBar() {
+      const btn = document.getElementById('startBtn');
+      const fill = document.getElementById('loadFill');
+      const text = document.getElementById('loadText');
+      let shown = 0;
+      function stageTarget() {
+        if (arReadyToStart()) return 100;                       // AR system ready
+        const sc = document.getElementById('scene');
+        if (sc && sc.hasLoaded) return 85;                      // 3D scene ready
+        if (window.AFRAME && AFRAME.systems && AFRAME.systems['mindar-image-system']) return 60; // AR library loaded
+        if (window.AFRAME) return 35;                           // 3D engine loaded
+        return 15;
+      }
+      (function tick() {
+        const target = stageTarget();
+        if (target === 100) shown = 100;
+        else shown = Math.min(target - 1, shown + Math.max(0.3, (target - shown) * 0.08));
+        fill.style.width = shown.toFixed(1) + '%';
+        if (shown >= 100) {
+          text.textContent = 'Ready!';
+          btn.disabled = false; btn.style.opacity = 1;
+          setTimeout(() => { document.getElementById('loadWrap').style.visibility = 'hidden'; }, 600);
+          return;
+        }
+        text.textContent = 'Loading the magic… ' + Math.floor(shown) + '%';
+        setTimeout(tick, 60);
+      })();
+    })();
+
     document.getElementById('startBtn').addEventListener('click', () => {
       const scene = document.getElementById('scene');
       scene.addEventListener('arError', () => dbg('Camera could not start. Please allow camera access for Safari (Settings > Safari > Camera) and reload.'));
@@ -297,8 +351,8 @@
       document.getElementById('start').style.display = 'none';
       showHint('Point your camera at the poster', null);
 
-      // 1) camera first, straight from the tap
-      try { scene.systems['mindar-image-system'].start(); } catch (e) { dbg('AR start failed: ' + e.message); }
+      // 1) camera first - but only once the AR system is fully set up
+      startWhenReady();
       // 2) unlock the silent animation video (no sound, no audio session)
       const video = document.getElementById('anim');
       video.play().then(() => { video.pause(); video.currentTime = 0; }).catch(() => {});
