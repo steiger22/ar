@@ -65,7 +65,7 @@
     <p>Point your camera at your poster and watch it come to life.</p>
     <div id="loadWrap"><div id="loadBar"><div id="loadFill"></div></div><div id="loadText">Loading the magic… 0%</div></div>
     <button id="startBtn" disabled style="opacity:.35">START</button>
-    <div style="margin-top:14px;font-size:11px;opacity:.5">v14</div>
+    <div style="margin-top:14px;font-size:11px;opacity:.5">v15</div>
   </div>
 
   <button id="soundBtn" aria-label="Sound">🔊</button>
@@ -248,7 +248,7 @@
       else soundBtnEl.textContent = soundOn ? '🔊' : '🔇';
     }
     function enableSound() {
-      if (actx || !cameraReady) return;
+      if (actx) return;
       try {
         actx = new (window.AudioContext || window.webkitAudioContext)();
         gainNode = actx.createGain(); gainNode.connect(actx.destination);
@@ -263,6 +263,11 @@
           })
           .catch(() => {});
       } catch (e) { actx = null; }
+      // If the phone blocked it, offer "Tap for sound" instead
+      setTimeout(() => {
+        if (actx && actx.state !== 'running') { try { actx.close(); } catch (e) {} actx = null; gainNode = null; soundBuf = null; }
+        setSoundLabel();
+      }, 800);
       setSoundLabel();
     }
     soundBtnEl.addEventListener('click', e => {
@@ -353,6 +358,8 @@
 
       // 1) camera first - but only once the AR system is fully set up
       startWhenReady();
+      // 2) sound on automatically, unlocked by this same tap
+      enableSound();
       // 2) unlock the silent animation video (no sound, no audio session)
       const video = document.getElementById('anim');
       video.play().then(() => { video.pause(); video.currentTime = 0; }).catch(() => {});
