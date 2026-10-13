@@ -65,7 +65,7 @@
     <p>Point your camera at your poster and watch it come to life.</p>
     <div id="loadWrap"><div id="loadBar"><div id="loadFill"></div></div><div id="loadText">Loading the magic… 0%</div></div>
     <button id="startBtn" disabled style="opacity:.35">START</button>
-    <div style="margin-top:14px;font-size:11px;opacity:.5">v15</div>
+    <div style="margin-top:14px;font-size:11px;opacity:.5">v16</div>
   </div>
 
   <button id="soundBtn" aria-label="Sound">🔊</button>
@@ -139,11 +139,12 @@
 
     // ---- Sound (separate from the video, so the camera keeps running on iPhone) ----
     let actx = null, gainNode = null, soundBuf = null, soundSrc = null, soundOn = true;
+    let gateActive = false;   // true only while the poster is found AND close enough
     function soundStop() {
       if (soundSrc) { try { soundSrc.stop(); } catch (e) {} soundSrc.disconnect(); soundSrc = null; }
     }
     function soundStart(offset) {
-      if (!actx || !soundBuf) return;
+      if (!actx || !soundBuf || !gateActive) return;
       soundStop();
       if (actx.state === 'suspended') actx.resume();
       soundSrc = actx.createBufferSource();
@@ -175,6 +176,7 @@
       setActive(on) {
         if (on === this.active) return;
         this.active = on;
+        gateActive = on;
         if (on) {
           this.video.play();
           soundStart(this.video.currentTime);
@@ -259,7 +261,7 @@
           .then(buf => {
             soundBuf = buf;
             const v = document.getElementById('anim');
-            if (!v.paused) soundStart(v.currentTime);
+            if (gateActive) soundStart(v.currentTime);
           })
           .catch(() => {});
       } catch (e) { actx = null; }
@@ -362,7 +364,7 @@
       enableSound();
       // 2) unlock the silent animation video (no sound, no audio session)
       const video = document.getElementById('anim');
-      video.play().then(() => { video.pause(); video.currentTime = 0; }).catch(() => {});
+      video.play().then(() => { if (!gateActive) { video.pause(); video.currentTime = 0; } }).catch(() => {});
     });
   </script>
 </body>
