@@ -36,8 +36,8 @@
     #zoomTag { position: fixed; top: 18px; left: 50%; transform: translateX(-50%); z-index: 10;
       background: rgba(11,11,11,.75); padding: 6px 14px; border-radius: 14px; font-size: 14px;
       opacity: 0; transition: opacity .3s; pointer-events: none; }
-    #soundBtn { position: fixed; top: 16px; right: 16px; z-index: 11; width: 44px; height: 44px;
-      border-radius: 50%; border: 1px solid rgba(243,236,224,.35); background: rgba(11,11,11,.7);
+    #soundBtn { position: fixed; top: 16px; right: 16px; z-index: 11; min-width: 44px; height: 44px;
+      border-radius: 22px; font-family: inherit; white-space: nowrap; padding: 0 14px !important; border: 1px solid rgba(243,236,224,.35); background: rgba(11,11,11,.7);
       color: #f3ece0; font-size: 20px; display: none; align-items: center; justify-content: center; padding: 0; }
     #meter { display: none; width: 160px; height: 4px; margin: 8px auto 0; background: rgba(243,236,224,.2);
       border-radius: 2px; overflow: hidden; }
@@ -60,9 +60,12 @@
     <h1>White Dragon</h1>
     <p>Point your camera at your poster and watch it come to life.</p>
     <button id="startBtn">START</button>
+    <div style="margin-top:14px;font-size:11px;opacity:.5">v12</div>
   </div>
 
   <button id="soundBtn" aria-label="Sound">🔊</button>
+
+  <div id="dbg" style="position:fixed;left:8px;right:8px;top:70px;z-index:30;font:12px/1.4 monospace;color:#ffd5cf;background:#300;padding:6px 8px;display:none;white-space:pre-wrap"></div>
 
   <div id="zoomTag">1.0×</div>
 
@@ -74,6 +77,11 @@
   </div>
 
   <script>
+    // ---- Error display (helps us find problems on the phone) ----
+    function dbg(msg) { const d = document.getElementById('dbg'); if (!d) return; d.style.display = 'block'; d.textContent += msg + '\n'; }
+    window.addEventListener('error', e => dbg('JS error: ' + e.message));
+    window.addEventListener('unhandledrejection', e => dbg('Promise error: ' + (e.reason && e.reason.message || e.reason)));
+
     // ---- Settings ----
     // How much of the screen the poster must fill before the animation starts (0.70 = 70%).
     const START_AT = 0.70;
@@ -227,35 +235,73 @@
   </div>
 
   <script>
-    document.getElementById('startBtn').addEventListener('click', async () => {
-      // Sound: create the audio engine inside this tap so iPhone allows it
+    // ---- Sound is switched on only AFTER the camera is running (avoids the white-screen clash on iPhone) ----
+    let cameraReady = false;
+    const soundBtnEl = document.getElementById('soundBtn');
+    function setSoundLabel() {
+      if (!actx) soundBtnEl.textContent = '🔇 Tap for sound';
+      else soundBtnEl.textContent = soundOn ? '🔊' : '🔇';
+    }
+    function enableSound() {
+      if (actx || !cameraReady) return;
       try {
         actx = new (window.AudioContext || window.webkitAudioContext)();
         gainNode = actx.createGain(); gainNode.connect(actx.destination);
-        const blank = actx.createBuffer(1, 1, 22050), b = actx.createBufferSource();
-        b.buffer = blank; b.connect(actx.destination); b.start(0);
         actx.resume();
+        soundOn = true;
         fetch('sound.m4a').then(r => r.arrayBuffer())
           .then(d => new Promise((ok, fail) => actx.decodeAudioData(d, ok, fail)))
-          .then(buf => { soundBuf = buf; })
+          .then(buf => {
+            soundBuf = buf;
+            const v = document.getElementById('anim');
+            if (!v.paused) soundStart(v.currentTime);
+          })
           .catch(() => {});
-      } catch (e) {}
+      } catch (e) { actx = null; }
+      setSoundLabel();
+    }
+    soundBtnEl.addEventListener('click', e => {
+      e.stopPropagation();
+      if (!actx) { enableSound(); return; }
+      soundOn = !soundOn;
+      if (gainNode) gainNode.gain.value = soundOn ? 1 : 0;
+      if (actx.state === 'suspended') actx.resume();
+      setSoundLabel();
+    });
+    // Any tap on the screen after the camera is up also switches the sound on
+    document.addEventListener('touchend', () => { if (cameraReady && !actx) enableSound(); });
 
-      const video = document.getElementById('anim');
-      try { await video.play(); video.pause(); video.currentTime = 0; } catch (e) {}   // unlock silent video
+    // Keep the camera picture alive (iPhone sometimes pauses it)
+    function cameraVideo() { return [...document.querySelectorAll('video')].find(v => v.id !== 'anim'); }
+    function kickCamera() { const c = cameraVideo(); if (c && c.paused) c.play().catch(() => {}); }
+    document.addEventListener('touchstart', kickCamera, { passive: true });
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) kickCamera(); });
 
-      const btn = document.getElementById('soundBtn');
-      btn.textContent = '🔊';
-      btn.style.display = 'flex';
-      btn.onclick = () => {
-        soundOn = !soundOn;
-        if (gainNode) gainNode.gain.value = soundOn ? 1 : 0;
-        if (actx && actx.state === 'suspended') actx.resume();
-        btn.textContent = soundOn ? '🔊' : '🔇';
-      };
+    document.getElementById('startBtn').addEventListener('click', () => {
+      const scene = document.getElementById('scene');
+      scene.addEventListener('arError', () => dbg('Camera could not start. Please allow camera access for Safari (Settings > Safari > Camera) and reload.'));
+      scene.addEventListener('arReady', () => {
+        cameraReady = true;
+        kickCamera();
+        soundBtnEl.style.display = 'flex';
+        setSoundLabel();
+        setTimeout(() => {
+          const cam = cameraVideo();
+          if (!cam) { dbg('Camera started but camera video is missing'); return; }
+          kickCamera();
+          const r = cam.getBoundingClientRect();
+          if (!cam.videoWidth || r.width < 10) dbg('Camera video not showing: ' + cam.videoWidth + 'x' + cam.videoHeight + ', box ' + Math.round(r.width) + 'x' + Math.round(r.height));
+        }, 2500);
+      });
+
       document.getElementById('start').style.display = 'none';
       showHint('Point your camera at the poster', null);
-      document.getElementById('scene').systems['mindar-image-system'].start();
+
+      // 1) camera first, straight from the tap
+      try { scene.systems['mindar-image-system'].start(); } catch (e) { dbg('AR start failed: ' + e.message); }
+      // 2) unlock the silent animation video (no sound, no audio session)
+      const video = document.getElementById('anim');
+      video.play().then(() => { video.pause(); video.currentTime = 0; }).catch(() => {});
     });
   </script>
 </body>
