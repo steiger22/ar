@@ -36,6 +36,9 @@
     #zoomTag { position: fixed; top: 18px; left: 50%; transform: translateX(-50%); z-index: 10;
       background: rgba(11,11,11,.75); padding: 6px 14px; border-radius: 14px; font-size: 14px;
       opacity: 0; transition: opacity .3s; pointer-events: none; }
+    #soundBtn { position: fixed; top: 16px; right: 16px; z-index: 11; width: 44px; height: 44px;
+      border-radius: 50%; border: 1px solid rgba(243,236,224,.35); background: rgba(11,11,11,.7);
+      color: #f3ece0; font-size: 20px; display: none; align-items: center; justify-content: center; padding: 0; }
     #meter { display: none; width: 160px; height: 4px; margin: 8px auto 0; background: rgba(243,236,224,.2);
       border-radius: 2px; overflow: hidden; }
     #meter i { display: block; height: 100%; width: 0%; background: #c8302a; transition: width .15s linear; }
@@ -58,6 +61,8 @@
     <p>Point your camera at your poster and watch it come to life.</p>
     <button id="startBtn">START</button>
   </div>
+
+  <button id="soundBtn" aria-label="Sound">🔊</button>
 
   <div id="zoomTag">1.0×</div>
 
@@ -190,7 +195,7 @@
     color-space="sRGB" renderer="colorManagement: true, physicallyCorrectLights"
     vr-mode-ui="enabled: false" device-orientation-permission-ui="enabled: false">
     <a-assets>
-      <video id="anim" src="animation.mp4" preload="auto" playsinline webkit-playsinline muted loop crossorigin="anonymous"></video>
+      <video id="anim" src="animation.mp4" preload="auto" playsinline webkit-playsinline loop crossorigin="anonymous"></video>
     </a-assets>
     <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
     <a-entity id="target" mindar-image-target="targetIndex: 0" size-gate>
@@ -202,7 +207,17 @@
   <script>
     document.getElementById('startBtn').addEventListener('click', async () => {
       const video = document.getElementById('anim');
-      try { await video.play(); video.pause(); } catch (e) {}   // unlock playback on iPhone
+      // Unlock playback WITH sound using this tap. If the phone refuses, fall back to silent.
+      video.muted = false;
+      try { await video.play(); video.pause(); video.currentTime = 0; }
+      catch (e) {
+        video.muted = true;
+        try { await video.play(); video.pause(); video.currentTime = 0; } catch (e2) {}
+      }
+      const btn = document.getElementById('soundBtn');
+      btn.textContent = video.muted ? '🔇' : '🔊';
+      btn.style.display = 'flex';
+      btn.onclick = () => { video.muted = !video.muted; btn.textContent = video.muted ? '🔇' : '🔊'; };
       document.getElementById('start').style.display = 'none';
       showHint('Point your camera at the poster', null);
       document.getElementById('scene').systems['mindar-image-system'].start();
